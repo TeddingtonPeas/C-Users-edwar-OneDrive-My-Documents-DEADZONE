@@ -101,15 +101,15 @@ class deadzone(IStrategy):
 
 
     ## WAE Period
-    #bollinger_band_lengths = np.arange(17,24,1)
-    #bb_mults = np.arange(1,21,1)
-    #deadzonemultipliers = np.around(np.arange(4.0,9.0,0.1), 1)
+    bollinger_band_lengths = np.arange(17,24,1)
+    bb_mults = np.arange(1,21,1)
+    deadzonemultipliers = np.around(np.arange(4.0,9.0,0.1), 1)
 
-### uncomment for fixed values
+### uncomment for fixed values during single backtest.  (dont use in optimmization)
 ###----------------------------
-    bollinger_band_lengths = [20]
-    bb_mults = [2]
-    deadzonemultipliers = [7.2]
+#    bollinger_band_lengths = [20]
+#    bb_mults = [2]
+#    deadzonemultipliers = [7.2]
 ###----------------------------
 
     #Sensitivity = IntParameter(50, 250, default = 50, space = "buy", optimize = True)
@@ -209,7 +209,6 @@ class deadzone(IStrategy):
         :return: DataFrame with entry columns populated
         """
         #dataframe['t1'] = (dataframe['macd'] - dataframe['macd'].shift(1)) * self.Sensitivity.value
-        print(dataframe.keys())
         dataframe['e1'] = (dataframe['bb_upperband_' + str(self.channelLength.value) + '_' + str(self.bb_mult.value)] - dataframe['bb_lowerband_' + str(self.channelLength.value) + '_' + str(self.bb_mult.value)]) 
         #dataframe['trendUown'] = dataframe['t1'] if dataframe['t1'] < 0 else 0
 
