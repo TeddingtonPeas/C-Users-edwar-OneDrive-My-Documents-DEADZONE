@@ -1,0 +1,3 @@
+FROM freqtradeorg/freqtrade:latest
+RUN pip install --user stockstats
+RUN pip install --user pandas_ta

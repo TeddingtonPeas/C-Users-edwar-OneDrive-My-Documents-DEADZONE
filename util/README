@@ -1,0 +1,13 @@
+Describe the each component of the docker stuff
+
+images. how to build and chose docker version.
+
+how to run docker and freqtrade
+
+
+INRO:  This repo is set up to run freqtrade using the docker seamlessly using the command line command "freqtrade". 
+       To enable this ability source the utils/sourcme file.  It defines a function called "freqtrade" which executes the docker command for freqtrade. 
+	
+to build a docker image run this:
+
+docker-compose build --pull

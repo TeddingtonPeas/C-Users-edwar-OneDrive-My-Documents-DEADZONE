@@ -1,0 +1,15 @@
+{
+    "main_plot": {},
+    "subplots": {
+      "deadzone": {
+        "deadzone7.2": {
+          "color": "#ffffff",
+          "type": "line"
+        },
+        "e1": {
+          "color": "#0000ff",
+          "type": "line"
+        }
+      }
+    }
+  }
