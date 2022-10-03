@@ -7,7 +7,7 @@ In order to run freqtrade you will need to download and install docker desktop. 
 
 This is a quick and dirty information dump to get you up and running.  You will undoubtably need more detail than this to be effective. However this should get you started.
 
-I reccomend reading throught the freqtrade documentation.  There is a lot of it but it is fairly complete. 
+I reccomend reading throught the freqtrade documentation. https://www.freqtrade.io/en/stable/  There is a lot of it but it is fairly complete. 
 
 ## Steps to setup environment:
 
@@ -15,6 +15,9 @@ I reccomend reading throught the freqtrade documentation.  There is a lot of it 
 2) install github desktop from https://desktop.github.com/
 3) using github desktop clone the following github repo to a location on your pc that you want to work.  Documents/deadzone for example
 4) github repo: https://github.com/donjonson/deadzone
+5) reboot pc
+6) build freqtrade docker image
+  1) double-click the util/setup_environment.bat
 
 That should be all you need to start using the freqtrade python trading bot environment.  
 
