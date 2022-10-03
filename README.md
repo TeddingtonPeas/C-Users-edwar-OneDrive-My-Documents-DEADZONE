@@ -1,4 +1,4 @@
-# freqtrade environment for deadzome strategy
+# freqtrade environment for deadzone strategy
 
 ## Steps to setup environment:
 
