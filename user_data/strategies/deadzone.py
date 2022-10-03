@@ -10,7 +10,7 @@ from typing import Optional, Union  # noqa
 import pandas_ta as pdta
 
 from freqtrade.strategy import (BooleanParameter, CategoricalParameter, DecimalParameter,
-                                IStrategy, IntParameter)
+                                IStrategy, IntParameter, stoploss_from_open)
 from freqtrade.exchange import timeframe_to_prev_date
 # --------------------------------
 # Add your lib to import here
@@ -39,7 +39,7 @@ class deadzone(IStrategy):
     timeframe = '15m'
 
     # Can this strategy go short?
-    can_short: bool = False
+    can_short: bool = True
 
     # Minimal ROI designed for the strategy.
     # This attribute will be overridden if the config file contains "minimal_roi".
@@ -54,10 +54,10 @@ class deadzone(IStrategy):
     stoploss = -1
 
     # Trailing stoploss
-    #trailing_stop = True
-    # trailing_only_offset_is_reached = False
-    # trailing_stop_positive = 0.01
-    # trailing_stop_positive_offset = 0.0  # Disabled / not configured
+    trailing_stop = False
+    trailing_only_offset_is_reached = True
+    trailing_stop_positive = 0.01
+    trailing_stop_positive_offset = 0.0  # Disabled / not configured
 
     # Run "populate_indicators()" only for new candle.
     process_only_new_candles = True
@@ -77,8 +77,13 @@ class deadzone(IStrategy):
 
     takeLong = True
     takeExtra = True
-    takeShort = False
+    takeShort = True
 
+    # DAYS OF WEEEK FILTER.  These days will trade
+    #0 = Monday
+    #6 = Sunday
+    # the following list excludes saturday and sunday from trading
+    # this can be optimized if dezired but currently is not in the optimization space
     active_days_of_week = [0,1,2,3,4]
 
     cooldownPeriod = IntParameter(0, 100, default=0, space="buy", optimize=False)
@@ -144,22 +149,20 @@ class deadzone(IStrategy):
     @property
     def plot_config(self):
         return {
-            # Main plot indicators (Moving averages, ...)
-            'main_plot': {
-                'tema': {},
-                'sar': {'color': 'white'},
-            },
-            'subplots': {
-                # Subplots - each dict defines one additional plot
-                "MACD": {
-                    'macd': {'color': 'blue'},
-                    'macdsignal': {'color': 'orange'},
+            "main_plot": {},
+            "subplots": {
+              "deadzone": {
+                "deadzone4.5": {
+                  "color": "#ffffff",
+                  "type": "line"
                 },
-                "RSI": {
-                    'rsi': {'color': 'red'},
+                "e1": {
+                  "color": "#0000ff",
+                  "type": "line"
                 }
+              }
             }
-        }
+        }        
 
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
 
@@ -184,6 +187,11 @@ class deadzone(IStrategy):
         #####
         for guy in self.atrPeriods:
             dataframe['atr_' + str(guy)] = ta.ATR(dataframe, guy)
+           
+           # dataframe['atr_' + str(guy) + '_long_stop'] = dataframe['close'] - (dataframe['atr_' + str(guy)] * self.atrMultLower.value)
+           # dataframe['atr_' + str(guy) + '_short_stop'] = dataframe['close'] + (dataframe['atr_' + str(guy)] * self.atrMultUpper.value)
+           # dataframe['atr_' + str(guy) + '_long_TP'] =   (self.riskLongMultip.value * dataframe['atr_' + str(guy) + '_long_stop'])
+           # dataframe['atr_' + str(guy) + '_short_TP'] =  (self.riskShortMultip.value * dataframe['atr_' + str(guy) + '_short_stop'])
         
 
         #####
@@ -196,6 +204,9 @@ class deadzone(IStrategy):
                 #bollinger = qtpylib.bollinger_bands(qtpylib.typical_price(dataframe), window=bblen, stds=2)
                 dataframe['bb_lowerband_' + mod + '_' + mod2] = calc_BBLower(dataframe['close'], bblen, mult)
                 dataframe['bb_upperband_' + mod + '_' + mod2] = calc_BBUpper(dataframe['close'], bblen, mult)
+
+        
+
 
         
         return dataframe
@@ -221,7 +232,8 @@ class deadzone(IStrategy):
             (
                 (qtpylib.crossed_above(dataframe['e1'], dataframe['deadzone' + str(self.deadzonemultiplier.value)]) | (dataframe['e1'] > dataframe['deadzone' + str(self.deadzonemultiplier.value)])) &  # longZoneCond
                 (((dataframe['macd'] - dataframe['macd'].shift(1)) * self.Sensitivity.value) > 0 ) &       #trendUp > 0
-                #(dataframe['date'].dt.dayofweek in self.active_days_of_week) &
+                ###########
+                ## Checks for active days of week will not trade if day of week is not in self.active_days_of_week
                 (
                     (dataframe['date'].dt.dayofweek == 0 if 0 in self.active_days_of_week else False) |
                     (dataframe['date'].dt.dayofweek == 1 if 1 in self.active_days_of_week else False) |
@@ -231,21 +243,34 @@ class deadzone(IStrategy):
                     (dataframe['date'].dt.dayofweek == 5 if 5 in self.active_days_of_week else False) |
                     (dataframe['date'].dt.dayofweek == 6 if 6 in self.active_days_of_week else False)
                 ) &
-                (dataframe['deadzone' + str(self.deadzonemultiplier.value)] != 0)  # DEADZONE != 0
+                (dataframe['deadzone' + str(self.deadzonemultiplier.value)] != 0) & # DEADZONE != 0
+                (self.takeLong)
                 #(dataframe['volume'] > 0)  # Make sure Volume is not 0
             ),
             'enter_long'] = 1
         # Uncomment to use shorts (Only used in futures/margin mode. Check the documentation for more info)
-        """
+        
         dataframe.loc[
             (
-                (qtpylib.crossed_above(dataframe['rsi'], self.sell_rsi.value)) &  # Signal: RSI crosses above sell_rsi
-                (dataframe['tema'] > dataframe['bb_middleband']) &  # Guard: tema above BB middle
-                (dataframe['tema'] < dataframe['tema'].shift(1)) &  # Guard: tema is falling
-                (dataframe['volume'] > 0)  # Make sure Volume is not 0
+                (qtpylib.crossed_above(dataframe['e1'], dataframe['deadzone' + str(self.deadzonemultiplier.value)]) | (dataframe['e1'] > dataframe['deadzone' + str(self.deadzonemultiplier.value)])) &  # longZoneCond
+                (((dataframe['macd'] - dataframe['macd'].shift(1)) * self.Sensitivity.value) < 0 ) &       #trendDown < 0
+                ###########
+                ## Checks for active days of week will not trade if day of week is not in self.active_days_of_week
+                (
+                    (dataframe['date'].dt.dayofweek == 0 if 0 in self.active_days_of_week else False) |
+                    (dataframe['date'].dt.dayofweek == 1 if 1 in self.active_days_of_week else False) |
+                    (dataframe['date'].dt.dayofweek == 2 if 2 in self.active_days_of_week else False) |
+                    (dataframe['date'].dt.dayofweek == 3 if 3 in self.active_days_of_week else False) |
+                    (dataframe['date'].dt.dayofweek == 4 if 4 in self.active_days_of_week else False) |
+                    (dataframe['date'].dt.dayofweek == 5 if 5 in self.active_days_of_week else False) |
+                    (dataframe['date'].dt.dayofweek == 6 if 6 in self.active_days_of_week else False)
+                ) &
+                (dataframe['deadzone' + str(self.deadzonemultiplier.value)] != 0) &  # DEADZONE != 0
+                (self.takeShort)
+                #(dataframe['volume'] > 0)  # Make sure Volume is not 0
             ),
             'enter_short'] = 1
-        """
+        
 
         
         return dataframe
@@ -260,6 +285,7 @@ class deadzone(IStrategy):
         
         ## put these in here so they can be hyperopted.  will slow down optimization runs...
         dataframe['exit_long'] = 0
+        dataframe['exit_short'] = 0
         # Uncomment to use shorts (Only used in futures/margin mode. Check the documentation for more info)
         """
         dataframe.loc[
@@ -286,14 +312,21 @@ class deadzone(IStrategy):
         
         trade_entry_price = trade.open_rate
         atrLongStop =trade.open_rate - (trade_candle['atr_' + str(self.atrPeriod.value)] * self.atrMultLower.value)
+        atrShortStop =trade.open_rate + (trade_candle['atr_' + str(self.atrPeriod.value)] * self.atrMultUpper.value)
         
         longRisk = trade_candle['close'] - atrLongStop
+        #longRisk = -1* (trade_candle['atr_' + str(self.atrPeriod.value)] * self.atrMultLower.value)
         longTp = trade_entry_price + (self.riskLongMultip.value * longRisk)
 
-        # Sell if price is >= TP point
-        #TODO check if longTP.item() is valid 
-        if ((len(longTp) > 0) and (current_rate >= longTp.item())):
+        shortRisk = trade_candle['close'] - atrShortStop
+        #shortRisk = (trade_candle['atr_' + str(self.atrPeriod.value)] * self.atrMultUpper.value)
+        shortTp = trade_entry_price + (self.riskShortMultip.value * shortRisk)
+
+        if ((len(longTp) > 0) and (current_rate >= longTp.item()) and (trade.is_short == False)):
             return 'long_TP_hit_' + str(longTp.item())
+
+        if ((len(shortTp) > 0) and (current_rate <= shortTp.item()) and (trade.is_short == True)):
+            return 'short_TP_hit_' + str(shortTp.item())
 
 
 
@@ -309,8 +342,13 @@ class deadzone(IStrategy):
         trade_date = timeframe_to_prev_date(self.timeframe, trade.open_date_utc)
         trade_candle = dataframe.loc[dataframe['date'] == trade_date]
         
-        trade_entry_price = trade.open_rate
-        atrLongStop =trade.open_rate - (trade_candle['atr_' + str(self.atrPeriod.value)] * self.atrMultLower.value)
+        ##### for trailing stop  
+        # but should use ATR of current candle
+        #atrLongStop = trade.open_rate - (trade_candle['atr_' + str(self.atrPeriod.value)] * self.atrMultLower.value)
+        #atrShortStop = trade.open_rate + (trade_candle['atr_' + str(self.atrPeriod.value)] * self.atrMultUpper.value)
+
+        atrLongStop = -1 * (trade_candle['atr_' + str(self.atrPeriod.value)] * self.atrMultLower.value) / trade.open_rate
+        atrShortStop = -1* (trade_candle['atr_' + str(self.atrPeriod.value)] * self.atrMultUpper.value) / trade.open_rate
         
         # Sell if price is < TP point
         
@@ -319,9 +357,32 @@ class deadzone(IStrategy):
         #stoploss_price = dataframe['close'] - (dataframe['atr'] * self.atrMultiUpper.value)
 
         # Convert absolute price to percentage relative to current_rate
-        if ((len(atrLongStop) > 0) and (atrLongStop.item() < current_rate)):
-            
-            return (atrLongStop.item() / current_rate) - 1
+        ###########
+        ## this is a trailing stop.
+        ###########
+       # if ((len(atrLongStop) > 0) and (atrLongStop.item() < current_rate) and (trade.is_short == False)):
+       #     
+       #     return (atrLongStop.item() / current_rate) - 1
+       #     
+       # if ((len(atrShortStop) > 0) and (atrShortStop.item() > current_rate) and (trade.is_short == True)):
+       #     
+       #     return (atrShortStop.item() / current_rate) - 1
+
+        ###########
+        ## END trailing stop
+        ###########
+
+        if ((len(atrLongStop) > 0) and (trade.is_short == False)):
+            #print("Stoploss percent is:" + str(float(atrLongStop.item())))
+            #print('stoploss from open: ' + str(stoploss_from_open(float(atrLongStop.item()), current_profit)))
+            #print("current_profit is: " + str(current_profit))
+            return stoploss_from_open(float(atrLongStop.item()), current_profit)
+
+        if ((len(atrShortStop) > 0) and (trade.is_short == True)):
+            #print("Stoploss percent is:" + str(float(atrShortStop.item())))
+            #print('stoploss from open: ' + str(stoploss_from_open(float(atrShortStop.item()), current_profit)))
+            #print("current_profit is: " + str(current_profit))
+            return stoploss_from_open(float(atrShortStop.item()), current_profit)
 
         # return maximum stoploss value, keeping current stoploss price unchanged
         
