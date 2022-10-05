@@ -1,3 +1,4 @@
+
 # pragma pylint: disable=missing-docstring, invalid-name, pointless-string-statement
 # flake8: noqa: F401
 
@@ -55,9 +56,9 @@ class deadzone(IStrategy):
 
     # Trailing stoploss
     trailing_stop = False
-    trailing_only_offset_is_reached = True
-    trailing_stop_positive = 0.01
-    trailing_stop_positive_offset = 0.0  # Disabled / not configured
+    #trailing_only_offset_is_reached = True
+    #trailing_stop_positive = 0.01
+    #trailing_stop_positive_offset = 0.0  # Disabled / not configured
 
     # Run "populate_indicators()" only for new candle.
     process_only_new_candles = True
@@ -342,13 +343,16 @@ class deadzone(IStrategy):
         trade_date = timeframe_to_prev_date(self.timeframe, trade.open_date_utc)
         trade_candle = dataframe.loc[dataframe['date'] == trade_date]
         
-        ##### for trailing stop  
-        # but should use ATR of current candle
-        #atrLongStop = trade.open_rate - (trade_candle['atr_' + str(self.atrPeriod.value)] * self.atrMultLower.value)
-        #atrShortStop = trade.open_rate + (trade_candle['atr_' + str(self.atrPeriod.value)] * self.atrMultUpper.value)
-
-        atrLongStop = -1 * (trade_candle['atr_' + str(self.atrPeriod.value)] * self.atrMultLower.value) / trade.open_rate
-        atrShortStop = -1* (trade_candle['atr_' + str(self.atrPeriod.value)] * self.atrMultUpper.value) / trade.open_rate
+        trade_entry_price = trade.open_rate
+        atrLongStop = -1 * ((trade_candle['atr_' + str(self.atrPeriod.value)] * self.atrMultLower.value)/trade.open_rate)
+        atrShortStop = -1 * ((trade_candle['atr_' + str(self.atrPeriod.value)] * self.atrMultUpper.value)/trade.open_rate)
+        
+        if (trade.is_short==True) and (len(atrShortStop) >0):
+            print('atrShortStop is: ' + str(atrShortStop.item()))
+            return stoploss_from_open(atrShortStop.item(), current_profit, is_short = trade.is_short)
+        if (trade.is_short==False) and (len(atrLongStop) >0):
+            print('atrLongStop is: ' + str(atrLongStop.item()))
+            return stoploss_from_open(atrLongStop.item(), current_profit, is_short = trade.is_short)
         
         # Sell if price is < TP point
         
@@ -357,32 +361,7 @@ class deadzone(IStrategy):
         #stoploss_price = dataframe['close'] - (dataframe['atr'] * self.atrMultiUpper.value)
 
         # Convert absolute price to percentage relative to current_rate
-        ###########
-        ## this is a trailing stop.
-        ###########
-       # if ((len(atrLongStop) > 0) and (atrLongStop.item() < current_rate) and (trade.is_short == False)):
-       #     
-       #     return (atrLongStop.item() / current_rate) - 1
-       #     
-       # if ((len(atrShortStop) > 0) and (atrShortStop.item() > current_rate) and (trade.is_short == True)):
-       #     
-       #     return (atrShortStop.item() / current_rate) - 1
 
-        ###########
-        ## END trailing stop
-        ###########
-
-        if ((len(atrLongStop) > 0) and (trade.is_short == False)):
-            #print("Stoploss percent is:" + str(float(atrLongStop.item())))
-            #print('stoploss from open: ' + str(stoploss_from_open(float(atrLongStop.item()), current_profit)))
-            #print("current_profit is: " + str(current_profit))
-            return stoploss_from_open(float(atrLongStop.item()), current_profit)
-
-        if ((len(atrShortStop) > 0) and (trade.is_short == True)):
-            #print("Stoploss percent is:" + str(float(atrShortStop.item())))
-            #print('stoploss from open: ' + str(stoploss_from_open(float(atrShortStop.item()), current_profit)))
-            #print("current_profit is: " + str(current_profit))
-            return stoploss_from_open(float(atrShortStop.item()), current_profit)
 
         # return maximum stoploss value, keeping current stoploss price unchanged
         
