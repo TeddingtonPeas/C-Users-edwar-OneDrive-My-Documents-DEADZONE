@@ -348,10 +348,10 @@ class deadzone(IStrategy):
         atrShortStop = -1 * ((trade_candle['atr_' + str(self.atrPeriod.value)] * self.atrMultUpper.value)/trade.open_rate)
         
         if (trade.is_short==True) and (len(atrShortStop) >0):
-            print('atrShortStop is: ' + str(atrShortStop.item()))
+            #print('atrShortStop is: ' + str(atrShortStop.item()))
             return stoploss_from_open(atrShortStop.item(), current_profit, is_short = trade.is_short)
         if (trade.is_short==False) and (len(atrLongStop) >0):
-            print('atrLongStop is: ' + str(atrLongStop.item()))
+            #print('atrLongStop is: ' + str(atrLongStop.item()))
             return stoploss_from_open(atrLongStop.item(), current_profit, is_short = trade.is_short)
         
         # Sell if price is < TP point
