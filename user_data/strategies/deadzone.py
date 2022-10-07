@@ -78,53 +78,74 @@ class deadzone(IStrategy):
 
     takeLong = True
     takeExtra = True
-    takeShort = True
+    takeShort = False
+    optimization = False
 
+    ###################################################
     # DAYS OF WEEEK FILTER.  These days will trade
+
     #0 = Monday
     #6 = Sunday
     # the following list excludes saturday and sunday from trading
     # this can be optimized if dezired but currently is not in the optimization space
+
     active_days_of_week = [0,1,2,3,4]
+
+    ####################################################
+
+
+    if optimization:
+        ######################################
+        ##  DEFINE RANGES FOR OPTIMIZATION
+        ######################################
+        riskLongMultip_range = np.round(np.arannge(0.1,10.0,0.1), 1)
+        riskShortMultip_range = np.round(np.arannge(0.1,10.0,0.1), 1)
+        atrPeriod_range = [11,12,23,14,15,16,17,18]
+        atrMultUpper_range = np.around(np.arange(0.1,3.5,-.1), 1)
+        atrMultLower_range = np.around(np.arange(0.1,3.5,-.1), 1)
+        bollinger_band_lengths = np.arange(17,24,1)
+        bb_mults = np.arange(1,21,1)
+        deadzonemultipliers = np.around(np.arange(4.0,9.0,0.1), 1)
+    else:
+        ##############################################
+        ##  DEFINE SINGLE POINTS FOR SINGLE BACKTEST
+        ##############################################
+        riskLongMultip_range = [1.2]
+        riskShortMultip_range =[1.2]
+        atrPeriod_range = [14]
+        atrMultUpper_range = [3]
+        atrMultLower_range = [3]
+        bollinger_band_lengths = [22]
+        bb_mults = [2]
+        deadzonemultipliers = [8.8]
+
+
+
+    ##############################################
+    ##  DEFINE Hyperopt Parameters with the above ranges
+    ##############################################
 
     cooldownPeriod = IntParameter(0, 100, default=0, space="buy", optimize=False)
 
      #TP : RR
-    riskLongMultip = DecimalParameter(0.1, 10, default=1.0, space="buy", decimals=1, optimize = True)  
-    riskShortMultip = DecimalParameter(0.1, 10, default=1.0, space="buy", optimize = False, decimals=1)
+    riskLongMultip = DecimalParameter(riskLongMultip_range[0],riskLongMultip_range[-1], default=riskLongMultip_range[0], space="buy", decimals=1, optimize = True)  
+    riskShortMultip = DecimalParameter(riskShortMultip_range[0],riskShortMultip_range[-1], default=riskShortMultip_range[0], space="buy", decimals=1, optimize = True)  
 
 
 
     ## ATR BAND PARAMS
     ##----------
-    sourceUpper = 'close'
-    sourceLower = 'close'
-    atrMultUpper = DecimalParameter(0.1, 3.5, default=2.0, space="buy", decimals=1) #ATR Long Stoploss
-    atrMultLower = DecimalParameter(0.1, 3.5, default=2.0, space="buy", optimize= False, decimals=1) #ATR Shor tStoploss
-    atrPeriod = IntParameter(10,20, default=14, optimize = False) # ATR length
-    atrPeriods = [14]
+    atrMultUpper = DecimalParameter(atrMultUpper_range[0], atrMultUpper_range[-1], default=atrMultUpper_range[0], space="buy", decimals=1) #ATR Long Stoploss
+    atrMultLower = DecimalParameter(atrMultLower_range[0], atrMultLower_range[-1], default=atrMultLower_range[0], space="buy", optimize= False, decimals=1) #ATR Shor tStoploss
+    atrPeriod = IntParameter(atrPeriod_range[0],atrPeriod_range[-1], default=atrPeriod_range[0], optimize = True) # ATR length
 
 
-
-    ## WAE Period
-    bollinger_band_lengths = np.arange(17,24,1)
-    bb_mults = np.arange(1,21,1)
-    deadzonemultipliers = np.around(np.arange(4.0,9.0,0.1), 1)
-
-### uncomment for fixed values during single backtest.  (dont use in optimmization)
-###----------------------------
-#    bollinger_band_lengths = [20]
-#    bb_mults = [2]
-#    deadzonemultipliers = [7.2]
-###----------------------------
-
-    #Sensitivity = IntParameter(50, 250, default = 50, space = "buy", optimize = True)
-    Sensitivity = CategoricalParameter([50, 250], default = 50, space = "buy", optimize = True)
+    
+    Sensitivity = 150
     fastLength = IntParameter(1, 250, default = 25, space = "buy", optimize = False) #FastEMALength 
     slowLength = IntParameter(1, 250, default = 150, space = "buy", optimize = False) #SlowEMALength 
     bb_mult= IntParameter(bb_mults[0], bb_mults[-1], default=bb_mults[0], space="buy", optimize= False) # DeadZone Multiplier
     channelLength = IntParameter( bollinger_band_lengths[0], bollinger_band_lengths[-1], default = bollinger_band_lengths[0], space = "buy", optimize = True) # BB Length
-    
     deadzonemultiplier = DecimalParameter(deadzonemultipliers[0], deadzonemultipliers[-1], default=deadzonemultipliers[0], space="buy", optimize= True, decimals=1) # DeadZone Multiplier
 
     #______________________________________________________________________________
@@ -172,7 +193,11 @@ class deadzone(IStrategy):
         ## DEADZONE
         #####
         for guy in self.deadzonemultipliers:
-           dataframe['deadzone' + str(guy)] = pdta.rma(ta.TRANGE(dataframe), 100) * guy
+            if self.optimization:
+                dataframe['deadzone' + str(guy)] = pdta.rma(ta.TRANGE(dataframe), 100) * guy
+            else:
+                dataframe['deadzone' + str(guy)] = pdta.rma(ta.TRANGE(dataframe), 100) * guy
+                dataframe['deadzone'] = pdta.rma(ta.TRANGE(dataframe), 100) * guy
 
         #####
         # MACD
@@ -186,8 +211,12 @@ class deadzone(IStrategy):
         #####
         ## ATR
         #####
-        for guy in self.atrPeriods:
-            dataframe['atr_' + str(guy)] = ta.ATR(dataframe, guy)
+        for guy in self.atrPeriod_range:
+            if self.optimization:
+                dataframe['atr_' + str(guy)] = ta.ATR(dataframe, guy)
+            else:
+                dataframe['atr_' + str(guy)] = ta.ATR(dataframe, guy)
+                dataframe['atr'] = ta.ATR(dataframe, guy)
            
            # dataframe['atr_' + str(guy) + '_long_stop'] = dataframe['close'] - (dataframe['atr_' + str(guy)] * self.atrMultLower.value)
            # dataframe['atr_' + str(guy) + '_short_stop'] = dataframe['close'] + (dataframe['atr_' + str(guy)] * self.atrMultUpper.value)
@@ -200,11 +229,18 @@ class deadzone(IStrategy):
         #####
         for bblen in self.bollinger_band_lengths:
             for mult in self.bb_mults:            
+
                 mod = str(bblen)
                 mod2 = str(mult)
                 #bollinger = qtpylib.bollinger_bands(qtpylib.typical_price(dataframe), window=bblen, stds=2)
-                dataframe['bb_lowerband_' + mod + '_' + mod2] = calc_BBLower(dataframe['close'], bblen, mult)
-                dataframe['bb_upperband_' + mod + '_' + mod2] = calc_BBUpper(dataframe['close'], bblen, mult)
+                if self.optimization:
+                    dataframe['bb_lowerband_' + mod + '_' + mod2] = calc_BBLower(dataframe['close'], bblen, mult)
+                    dataframe['bb_upperband_' + mod + '_' + mod2] = calc_BBUpper(dataframe['close'], bblen, mult)
+                else:
+                    dataframe['bb_lowerband_' + mod + '_' + mod2] = calc_BBLower(dataframe['close'], bblen, mult)
+                    dataframe['bb_upperband_' + mod + '_' + mod2] = calc_BBUpper(dataframe['close'], bblen, mult)
+                    dataframe['bb_lowerband'] = calc_BBLower(dataframe['close'], bblen, mult)
+                    dataframe['bb_upperband'] = calc_BBUpper(dataframe['close'], bblen, mult)
 
         
 
@@ -226,13 +262,13 @@ class deadzone(IStrategy):
 
         ## comment out before optimizing
         dataframe['bc1'] = (qtpylib.crossed_above(dataframe['e1'], dataframe['deadzone' + str(self.deadzonemultiplier.value)]) | (dataframe['e1'] > dataframe['deadzone' + str(self.deadzonemultiplier.value)]))
-        dataframe['bc2'] = (((dataframe['macd'] - dataframe['macd'].shift(1)) * self.Sensitivity.value) > 0 )
+        dataframe['bc2'] = (((dataframe['macd'] - dataframe['macd'].shift(1)) * self.Sensitivity) > 0 )
         dataframe['bc3'] = (dataframe['deadzone' + str(self.deadzonemultiplier.value)])
 
         dataframe.loc[
             (
                 (qtpylib.crossed_above(dataframe['e1'], dataframe['deadzone' + str(self.deadzonemultiplier.value)]) | (dataframe['e1'] > dataframe['deadzone' + str(self.deadzonemultiplier.value)])) &  # longZoneCond
-                (((dataframe['macd'] - dataframe['macd'].shift(1)) * self.Sensitivity.value) > 0 ) &       #trendUp > 0
+                (((dataframe['macd'] - dataframe['macd'].shift(1)) * self.Sensitivity) > 0 ) &       #trendUp > 0
                 ###########
                 ## Checks for active days of week will not trade if day of week is not in self.active_days_of_week
                 (
@@ -254,7 +290,7 @@ class deadzone(IStrategy):
         dataframe.loc[
             (
                 (qtpylib.crossed_above(dataframe['e1'], dataframe['deadzone' + str(self.deadzonemultiplier.value)]) | (dataframe['e1'] > dataframe['deadzone' + str(self.deadzonemultiplier.value)])) &  # longZoneCond
-                (((dataframe['macd'] - dataframe['macd'].shift(1)) * self.Sensitivity.value) < 0 ) &       #trendDown < 0
+                (((dataframe['macd'] - dataframe['macd'].shift(1)) * self.Sensitivity) < 0 ) &       #trendDown < 0
                 ###########
                 ## Checks for active days of week will not trade if day of week is not in self.active_days_of_week
                 (
@@ -349,10 +385,16 @@ class deadzone(IStrategy):
         
         if (trade.is_short==True) and (len(atrShortStop) >0):
             #print('atrShortStop is: ' + str(atrShortStop.item()))
-            return stoploss_from_open(atrShortStop.item(), current_profit, is_short = trade.is_short)
+            mysl = stoploss_from_open(atrShortStop.item(), current_profit, is_short = trade.is_short)
+            if mysl == 0:
+                mysl = 1
+            return mysl
         if (trade.is_short==False) and (len(atrLongStop) >0):
             #print('atrLongStop is: ' + str(atrLongStop.item()))
-            return stoploss_from_open(atrLongStop.item(), current_profit, is_short = trade.is_short)
+            mysl = stoploss_from_open(atrLongStop.item(), current_profit, is_short = trade.is_short)
+            if mysl == 0:
+                mysl = 1
+            return mysl
         
         # Sell if price is < TP point
         
